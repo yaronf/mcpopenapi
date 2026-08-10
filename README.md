@@ -4,9 +4,9 @@
 [![CI](https://github.com/yaronf/mcpopenapi/actions/workflows/test.yml/badge.svg)](https://github.com/yaronf/mcpopenapi/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Turn an **OpenAPI 3** document into an **MCP** server over **Streamable HTTP**.
+Turn an **OpenAPI 3** document into **MCP** tools over **Streamable HTTP**, or into portable **tool schemas** for other runtimes (e.g. OpenAI function calling).
 
-Each operation becomes a tool (`operationId`). On `tools/call`, the module rebuilds the HTTP request and forwards it to an in-process `http.Handler` — no second network hop, no embedded auth.
+Each operation becomes a tool (`operationId`). On MCP `tools/call`, the module rebuilds the HTTP request and forwards it to an in-process `http.Handler` — no second network hop, no embedded auth. `ParseToolSchemas` exposes the same OpenAPI→schema mapping without standing up MCP.
 
 Born for [tripmap](https://github.com/yaronf/tripmap) (`/mcp`), but usable anywhere you already have an OpenAPI-described `http.Handler`.
 
@@ -17,7 +17,7 @@ OpenAPI is a natural description of an HTTP API; MCP is the native tool surface 
 ## Install
 
 ```bash
-go get github.com/yaronf/mcpopenapi@v0.1.0
+go get github.com/yaronf/mcpopenapi@v0.2.0
 ```
 
 Dependency: [`github.com/modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) v1.7+.
@@ -106,6 +106,15 @@ type Config struct {
 ```
 
 `Instructions` is advertised on initialize. Codex/ChatGPT use it as cross-tool guidance — put workflow constraints there, not only in individual operation descriptions.
+
+## Schema-only export
+
+When you need the OpenAPI→tool mapping without MCP (for example OpenAI Responses / Chat Completions function tools):
+
+```go
+tools, err := mcpopenapi.ParseToolSchemas(openAPIBytes, "/api/agent")
+// tools[i].Name, Description, InputSchema, ReadOnly
+```
 
 ## Limitations (v1)
 
