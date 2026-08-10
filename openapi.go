@@ -9,17 +9,19 @@ import (
 )
 
 type operation struct {
-	ID          string
-	Method      string
-	Path        string
-	Summary     string
-	Description string
-	PathParams  []param
-	QueryParams []param
+	ID           string
+	Method       string
+	Path         string
+	Summary      string
+	Description  string
+	PathParams   []param
+	QueryParams  []param
 	HeaderParams []param
-	Body        *bodySpec
-	InputSchema map[string]any
-	ReadOnly    bool
+	Body         *bodySpec
+	InputSchema  map[string]any
+	ReadOnly     bool
+	// Audiences from the operation's audience extension; nil if absent.
+	Audiences []string
 }
 
 type param struct {
@@ -37,7 +39,7 @@ type bodySpec struct {
 	BodyProp string
 }
 
-func parseOperations(raw []byte, pathPrefix string) ([]*operation, error) {
+func parseOperations(raw []byte, opts ParseOptions) ([]*operation, error) {
 	var doc map[string]any
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse openapi: %w", err)
@@ -45,6 +47,11 @@ func parseOperations(raw []byte, pathPrefix string) ([]*operation, error) {
 	paths, _ := doc["paths"].(map[string]any)
 	if paths == nil {
 		return nil, fmt.Errorf("openapi: missing paths")
+	}
+	pathPrefix := opts.PathPrefix
+	audienceKey := opts.AudienceKey
+	if audienceKey == "" {
+		audienceKey = "x-audiences"
 	}
 
 	var ops []*operation
@@ -68,9 +75,12 @@ func parseOperations(raw []byte, pathPrefix string) ([]*operation, error) {
 			if opID == "" {
 				continue
 			}
-			op, err := buildOperation(doc, opID, strings.ToUpper(method), path, opNode)
+			op, err := buildOperation(doc, opID, strings.ToUpper(method), path, opNode, audienceKey)
 			if err != nil {
 				return nil, fmt.Errorf("operation %s: %w", opID, err)
+			}
+			if !keepForAudience(op.Audiences, opts) {
+				continue
 			}
 			ops = append(ops, op)
 		}
@@ -78,6 +88,25 @@ func parseOperations(raw []byte, pathPrefix string) ([]*operation, error) {
 	// Stable order for tests / listTools.
 	sortOperations(ops)
 	return ops, nil
+}
+
+func keepForAudience(audiences []string, opts ParseOptions) bool {
+	if opts.Audience == "" {
+		return true
+	}
+	if audiences == nil {
+		include := true
+		if opts.IncludeUnannotated != nil {
+			include = *opts.IncludeUnannotated
+		}
+		return include
+	}
+	for _, a := range audiences {
+		if a == opts.Audience {
+			return true
+		}
+	}
+	return false
 }
 
 func skipOperation(opNode map[string]any) bool {
@@ -93,7 +122,7 @@ func skipOperation(opNode map[string]any) bool {
 	return len(arr) == 0
 }
 
-func buildOperation(doc map[string]any, id, method, path string, opNode map[string]any) (*operation, error) {
+func buildOperation(doc map[string]any, id, method, path string, opNode map[string]any, audienceKey string) (*operation, error) {
 	op := &operation{
 		ID:          id,
 		Method:      method,
@@ -101,6 +130,7 @@ func buildOperation(doc map[string]any, id, method, path string, opNode map[stri
 		Summary:     asString(opNode["summary"]),
 		Description: asString(opNode["description"]),
 		ReadOnly:    method == "GET" || method == "HEAD",
+		Audiences:   operationAudiences(opNode, audienceKey),
 	}
 
 	for _, p := range asSlice(opNode["parameters"]) {
@@ -319,6 +349,34 @@ func lookupRef(doc map[string]any, ref string) map[string]any {
 		cur = m[part]
 	}
 	return asMap(cur)
+}
+
+// operationAudiences returns the audience list, or nil if the extension is absent.
+func operationAudiences(opNode map[string]any, key string) []string {
+	raw, ok := opNode[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, x := range v {
+			if s, ok := x.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, s := range v {
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return []string{}
+	}
 }
 
 func sortOperations(ops []*operation) {

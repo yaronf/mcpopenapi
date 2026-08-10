@@ -17,7 +17,7 @@ OpenAPI is a natural description of an HTTP API; MCP is the native tool surface 
 ## Install
 
 ```bash
-go get github.com/yaronf/mcpopenapi@v0.2.0
+go get github.com/yaronf/mcpopenapi@v0.3.0
 ```
 
 Dependency: [`github.com/modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) v1.7+.
@@ -82,6 +82,24 @@ If an operation declares a header parameter named `Idempotency-Key`, it is **opt
 
 Set `PathPrefix` (e.g. `"/api/agent"`) to expose only that subtree. Useful when the same OpenAPI document also documents `/health` or other public routes.
 
+### Audience filter
+
+Operations may declare an `x-audiences` list (override the extension key with `AudienceKey`):
+
+```yaml
+x-audiences: [api, assistant]
+```
+
+When `Audience` is set on `Config` / `ParseOptions`:
+
+| Operation | Result |
+|-----------|--------|
+| Lists the audience | Kept |
+| Omits the extension | Kept if `IncludeUnannotated` is true (default); dropped if false |
+| Lists other audiences only | Dropped |
+
+Audience label strings are chosen by the caller; this module does not define product-specific names.
+
 ## Transport
 
 `NewHandler` returns a **stateless** Streamable HTTP handler (`StreamableHTTPOptions.Stateless`). Each request is independent; no `Mcp-Session-Id` bookkeeping. That matches simple tool servers and works well behind load balancers.
@@ -96,12 +114,15 @@ The handler does **not** check credentials. Mount it behind your own middleware 
 
 ```go
 type Config struct {
-    Name         string       // MCP serverInfo.name
-    Version      string       // MCP serverInfo.version
-    Instructions string       // server-wide guidance (keep first ~512 chars useful)
-    OpenAPIYAML  []byte       // OpenAPI 3 document
-    Upstream     http.Handler // required; receives reconstructed requests
-    PathPrefix   string       // optional path filter
+    Name               string       // MCP serverInfo.name
+    Version            string       // MCP serverInfo.version
+    Instructions       string       // server-wide guidance (keep first ~512 chars useful)
+    OpenAPIYAML        []byte       // OpenAPI 3 document
+    Upstream           http.Handler // required; receives reconstructed requests
+    PathPrefix         string       // optional path filter
+    Audience           string       // optional; filter by x-audiences
+    AudienceKey        string       // optional; default "x-audiences"
+    IncludeUnannotated *bool        // optional; default true when Audience set
 }
 ```
 
@@ -114,6 +135,12 @@ When you need the OpenAPI→tool mapping without MCP (for example OpenAI Respons
 ```go
 tools, err := mcpopenapi.ParseToolSchemas(openAPIBytes, "/api/agent")
 // tools[i].Name, Description, InputSchema, ReadOnly
+
+// With audience filter (only ops that list "assistant"):
+tools, err = mcpopenapi.ParseToolSchemasOpts(openAPIBytes, mcpopenapi.ParseOptions{
+    Audience:           "assistant",
+    IncludeUnannotated: mcpopenapi.Bool(false),
+})
 ```
 
 ## Limitations (v1)

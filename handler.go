@@ -28,6 +28,15 @@ type Config struct {
 	// prefix (e.g. "/api/agent"). Empty means all operations with an
 	// operationId except those with explicit empty security.
 	PathPrefix string
+	// Audience, when non-empty, filters tools by the operation's audience
+	// extension (see AudienceKey / IncludeUnannotated).
+	Audience string
+	// AudienceKey is the OpenAPI extension key for audiences. Empty means
+	// "x-audiences".
+	AudienceKey string
+	// IncludeUnannotated controls operations that omit the audience
+	// extension when Audience is set. nil means true (include them).
+	IncludeUnannotated *bool
 }
 
 // NewHandler builds a Streamable HTTP MCP handler (stateless) whose tools
@@ -46,7 +55,12 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		cfg.Version = "0.0.0"
 	}
 
-	ops, err := parseOperations(cfg.OpenAPIYAML, cfg.PathPrefix)
+	ops, err := parseOperations(cfg.OpenAPIYAML, ParseOptions{
+		PathPrefix:         cfg.PathPrefix,
+		Audience:           cfg.Audience,
+		AudienceKey:        cfg.AudienceKey,
+		IncludeUnannotated: cfg.IncludeUnannotated,
+	})
 	if err != nil {
 		return nil, err
 	}
