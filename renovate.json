@@ -5,25 +5,75 @@
     ":dependencyDashboard",
     "schedule:weekly"
   ],
-  "labels": ["dependencies"],
-  "postUpdateOptions": ["gomodTidy"],
+  "labels": [
+    "dependencies"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
   "packageRules": [
     {
       "description": "Group routine Go module bumps",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchDepTypes": [
+        "require",
+        "indirect",
+        "replace",
+        "tool"
+      ],
       "groupName": "go modules"
     },
     {
       "description": "Group GitHub Actions bumps",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "github-actions"
     },
     {
+      "description": "Do not bump the go (language) directive automatically",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Prompt Go toolchain patch PRs (not weekly)",
+      "matchPackageNames": [
+        "go"
+      ],
+      "matchDepTypes": [
+        "toolchain"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "go toolchain",
+      "schedule": [
+        "at any time"
+      ]
+    },
+    {
       "description": "Major Go bumps stay as separate PRs",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["major"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "groupName": null
     }
   ]
